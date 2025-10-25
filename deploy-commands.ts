@@ -18,6 +18,19 @@ const commands = [
       },
     ],
   },
+  {
+    name: "robux-after-tax",
+    description: "Calculate how much robux you will receive after tax.",
+    options: [
+      {
+        name: "amount",
+        type: 4, // INTEGER type
+        description: "The amount of robux before tax",
+        required: true,
+        min_value: 1,
+      },
+    ],
+  },
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN!);

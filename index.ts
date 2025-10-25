@@ -54,6 +54,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
   }
+
+  if (interaction.commandName === "robux-after-tax") {
+    try {
+      const robuxBeforeTax = interaction.options.getInteger("amount", true);
+      const robuxAfterTax = Math.round(robuxBeforeTax * 0.7);
+
+      await interaction.reply({
+        content: `💵 If you charge **${robuxBeforeTax.toLocaleString()}** Robux, you will receive **${robuxAfterTax.toLocaleString()}** Robux after tax.`,
+        ephemeral: false,
+      });
+
+      console.log("✅ Reply sent successfully");
+    } catch (error) {
+      console.error("❌ Error handling command:", error);
+
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "❌ An error occurred while processing your command.",
+          ephemeral: true,
+        });
+      }
+    }
+  }
 });
 
 // Login to Discord
