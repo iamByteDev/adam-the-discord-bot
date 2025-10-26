@@ -6,7 +6,6 @@ import {
   PermissionFlagsBits,
   TextChannel,
   Message,
-  ColorResolvable,
 } from "discord.js";
 import { config } from "dotenv";
 
