@@ -44,13 +44,31 @@ const commands = [
       {
         name: "duration",
         type: 3,
-        description: "Ban duration (e.g., 1d, 7d, 30d, permanent)",
+        description: "Ban duration (e.g., 1h, 7d, 30d, permanent)",
         required: true,
       },
       {
         name: "reason",
         type: 3,
         description: "Reason for the ban",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "unban",
+    description: "Unban a user from the server.",
+    options: [
+      {
+        name: "user-id",
+        type: 3,
+        description: "The user ID to unban",
+        required: true,
+      },
+      {
+        name: "reason",
+        type: 3,
+        description: "Reason for the unban",
         required: false,
       },
     ],
@@ -98,6 +116,24 @@ const commands = [
     ],
   },
   {
+    name: "unmute",
+    description: "Remove timeout from a member (unmute them).",
+    options: [
+      {
+        name: "target",
+        type: 6,
+        description: "The member to unmute",
+        required: true,
+      },
+      {
+        name: "reason",
+        type: 3,
+        description: "Reason for the unmute",
+        required: false,
+      },
+    ],
+  },
+  {
     name: "set-order-status",
     description: "Create or update an order status message.",
     options: [
@@ -124,8 +160,7 @@ const commands = [
       {
         name: "title",
         type: 3,
-        description:
-          "Embed title (supports Discord markdown: **bold** *italic* __underline__)",
+        description: "Embed title (supports Discord markdown)",
         required: true,
       },
       {
@@ -137,8 +172,7 @@ const commands = [
       {
         name: "color",
         type: 3,
-        description:
-          "Embed color in hex (e.g., #FF0000 for red, #00FF00 for green)",
+        description: "Embed color in hex (e.g., #FF0000)",
         required: false,
       },
     ],
@@ -150,6 +184,56 @@ const commands = [
   {
     name: "remove-status",
     description: "Remove the order status message from this channel.",
+  },
+  {
+    name: "vouch",
+    description: "Leave a vouch for someone.",
+    options: [
+      {
+        name: "user",
+        type: 6,
+        description: "The user to vouch for",
+        required: true,
+      },
+      {
+        name: "rating",
+        type: 4,
+        description: "Rating (1-5 stars)",
+        required: true,
+        min_value: 1,
+        max_value: 5,
+      },
+      {
+        name: "comment",
+        type: 3,
+        description: "Your vouch comment",
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "vouches",
+    description: "View vouches for a user.",
+    options: [
+      {
+        name: "user",
+        type: 6,
+        description: "The user to view vouches for (leave empty for yourself)",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "remove-vouch",
+    description: "Remove your vouch for someone.",
+    options: [
+      {
+        name: "user",
+        type: 6,
+        description: "The user whose vouch you want to remove",
+        required: true,
+      },
+    ],
   },
 ];
 
@@ -170,9 +254,9 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN!);
     )) as any;
 
     console.log(
-      `Successfully reloaded ${data.length} application (/) commands.`
+      `✅ Successfully reloaded ${data.length} application (/) commands.`
     );
   } catch (error) {
-    console.error("Error deploying commands:", error);
+    console.error("❌ Error deploying commands:", error);
   }
 })();
