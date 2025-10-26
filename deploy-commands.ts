@@ -11,7 +11,7 @@ const commands = [
     options: [
       {
         name: "amount",
-        type: 4, // INTEGER type
+        type: 4,
         description: "The amount of robux wanted after tax",
         required: true,
         min_value: 1,
@@ -24,10 +24,76 @@ const commands = [
     options: [
       {
         name: "amount",
-        type: 4, // INTEGER type
+        type: 4,
         description: "The amount of robux before tax",
         required: true,
         min_value: 1,
+      },
+    ],
+  },
+  {
+    name: "ban",
+    description: "Ban a member from the server.",
+    options: [
+      {
+        name: "target",
+        type: 6, // USER type
+        description: "The member to ban",
+        required: true,
+      },
+      {
+        name: "duration",
+        type: 3, // STRING type
+        description: "Ban duration (e.g., 1d, 7d, 30d, permanent)",
+        required: true,
+      },
+      {
+        name: "reason",
+        type: 3, // STRING type
+        description: "Reason for the ban",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "kick",
+    description: "Kick a member from the server.",
+    options: [
+      {
+        name: "target",
+        type: 6, // USER type
+        description: "The member to kick",
+        required: true,
+      },
+      {
+        name: "reason",
+        type: 3, // STRING type
+        description: "Reason for the kick",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "mute",
+    description: "Timeout a member (mute them).",
+    options: [
+      {
+        name: "target",
+        type: 6, // USER type
+        description: "The member to mute",
+        required: true,
+      },
+      {
+        name: "duration",
+        type: 3, // STRING type
+        description: "Mute duration (e.g., 5m, 1h, 1d)",
+        required: true,
+      },
+      {
+        name: "reason",
+        type: 3, // STRING type
+        description: "Reason for the mute",
+        required: false,
       },
     ],
   },
@@ -41,7 +107,6 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN!);
       `Started refreshing ${commands.length} application (/) commands.`
     );
 
-    // Deploy to specific guild (instant, for testing)
     const data = (await rest.put(
       Routes.applicationGuildCommands(
         process.env.CLIENT_ID!,
