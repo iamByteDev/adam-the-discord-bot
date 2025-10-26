@@ -118,6 +118,36 @@ const commands = [
     ],
   },
   {
+    name: "stick-message",
+    description: "Create a sticky embed message that stays at the bottom.",
+    options: [
+      {
+        name: "title",
+        type: 3,
+        description:
+          "Embed title (supports Discord markdown: **bold** *italic* __underline__)",
+        required: true,
+      },
+      {
+        name: "description",
+        type: 3,
+        description: "Embed description (supports Discord markdown)",
+        required: true,
+      },
+      {
+        name: "color",
+        type: 3,
+        description:
+          "Embed color in hex (e.g., #FF0000 for red, #00FF00 for green)",
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "remove-sticky",
+    description: "Remove the sticky message from this channel.",
+  },
+  {
     name: "remove-status",
     description: "Remove the order status message from this channel.",
   },

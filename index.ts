@@ -6,6 +6,7 @@ import {
   PermissionFlagsBits,
   TextChannel,
   Message,
+  ColorResolvable,
 } from "discord.js";
 import { config } from "dotenv";
 
@@ -13,22 +14,33 @@ config();
 
 console.log("🔍 Checking environment variables...");
 console.log("Token exists:", !!process.env.DISCORD_TOKEN);
+console.log("Token length:", process.env.DISCORD_TOKEN?.length);
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildMessages, // Required for sticky messages
-    GatewayIntentBits.MessageContent, // Required for sticky messages
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
 });
 
-// Store order status messages: { channelId: { messageId, embed, lastMessageCount } }
-const orderStatusMessages = new Map<
-  string,
-  { messageId: string; embed: EmbedBuilder; lastMessageCount: number }
->();
+// Store sticky messages data
+interface StickyData {
+  messageId: string;
+  embedData: {
+    title: string;
+    description: string;
+    color: number;
+    footer?: string;
+    timestamp?: boolean;
+  };
+  type: "text" | "status";
+  isUpdating: boolean;
+}
+
+const stickyMessages = new Map<string, StickyData>();
 
 client.once(Events.ClientReady, (c) => {
   console.log(`✅ Bot is ready! Logged in as ${c.user.tag}`);
@@ -62,6 +74,13 @@ function parseDuration(duration: string): number | null {
     default:
       return null;
   }
+}
+
+// Helper function to parse hex color
+function parseHexColor(hex: string): number {
+  const cleaned = hex.replace("#", "");
+  const parsed = parseInt(cleaned, 16);
+  return isNaN(parsed) ? 0x5865f2 : parsed; // Default to Discord blurple if invalid
 }
 
 // Helper function to get status details
@@ -125,24 +144,46 @@ function getStatusDetails(status: string): {
   }
 }
 
-// Sticky message handler
+// Helper function to create embed from sticky data
+function createEmbedFromData(data: StickyData["embedData"]): EmbedBuilder {
+  const embed = new EmbedBuilder()
+    .setTitle(data.title)
+    .setDescription(data.description)
+    .setColor(data.color);
+
+  if (data.footer) {
+    embed.setFooter({ text: data.footer });
+  }
+
+  if (data.timestamp) {
+    embed.setTimestamp();
+  }
+
+  return embed;
+}
+
+// Sticky message handler - repositions message to bottom
 client.on(Events.MessageCreate, async (message) => {
   // Ignore bot messages
   if (message.author.bot) return;
 
   const channelId = message.channel.id;
-  const stickyData = orderStatusMessages.get(channelId);
+  const stickyData = stickyMessages.get(channelId);
 
   if (!stickyData) return;
+
+  // Prevent duplicate updates with lock
+  if (stickyData.isUpdating) {
+    console.log("⏳ Sticky update already in progress, skipping...");
+    return;
+  }
 
   try {
     const channel = message.channel as TextChannel;
 
-    // Count messages since last sticky (to avoid re-posting too frequently)
-    stickyData.lastMessageCount++;
-
-    // Only re-post after 3 messages to reduce spam
-    if (stickyData.lastMessageCount < 1) return;
+    // Set lock to prevent concurrent updates
+    stickyData.isUpdating = true;
+    stickyMessages.set(channelId, stickyData);
 
     // Delete the old sticky message
     try {
@@ -152,19 +193,27 @@ client.on(Events.MessageCreate, async (message) => {
       console.log("Old sticky message not found");
     }
 
-    // Send new sticky message at the bottom
-    const newMessage = await channel.send({ embeds: [stickyData.embed] });
+    // Create embed from stored data
+    const embed = createEmbedFromData(stickyData.embedData);
 
-    // Update stored data
-    orderStatusMessages.set(channelId, {
+    // Send new sticky message at the bottom
+    const newMessage = await channel.send({ embeds: [embed] });
+
+    // Update stored data with new message ID and unlock
+    stickyMessages.set(channelId, {
+      ...stickyData,
       messageId: newMessage.id,
-      embed: stickyData.embed,
-      lastMessageCount: 0,
+      isUpdating: false,
     });
 
     console.log("📌 Sticky message repositioned to bottom");
   } catch (error) {
     console.error("Error handling sticky message:", error);
+    // Unlock on error
+    if (stickyData) {
+      stickyData.isUpdating = false;
+      stickyMessages.set(channelId, stickyData);
+    }
   }
 });
 
@@ -173,7 +222,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   console.log("🎯 Command received:", interaction.commandName);
 
-  // Robux commands
+  // ==================== ROBUX COMMANDS ====================
+
   if (interaction.commandName === "robux-before-tax") {
     try {
       const robuxAfterTax = interaction.options.getInteger("amount", true);
@@ -208,7 +258,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // Ban command
+  // ==================== MODERATION COMMANDS ====================
+
   if (interaction.commandName === "ban") {
     try {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.BanMembers)) {
@@ -270,7 +321,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // Kick command
   if (interaction.commandName === "kick") {
     try {
       if (
@@ -330,7 +380,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // Mute command
   if (interaction.commandName === "mute") {
     try {
       if (
@@ -410,7 +459,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // Set Order Status command
+  // ==================== STICKY COMMANDS ====================
+
   if (interaction.commandName === "set-order-status") {
     try {
       const status = interaction.options.getString("status", true);
@@ -424,40 +474,40 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(statusDetails.color)
-        .setTitle(`${statusDetails.emoji} Order Status`)
-        .addFields(
-          { name: "Current Status", value: statusDetails.title, inline: false },
-          { name: "Details", value: statusDetails.description, inline: false }
-        )
-        .setFooter({ text: `Last updated by ${interaction.user.tag}` })
-        .setTimestamp();
-
-      // Check if there's an existing status message in this channel
-      const existingData = orderStatusMessages.get(channel.id);
+      // Check if there's an existing sticky in this channel
+      const existingData = stickyMessages.get(channel.id);
 
       if (existingData) {
         try {
-          // Delete the old message
           const existingMessage = await channel.messages.fetch(
             existingData.messageId
           );
           await existingMessage.delete();
-          console.log("🗑️ Deleted old status message");
+          console.log("🗑️ Deleted old sticky message");
         } catch (error) {
           console.log("Old message not found or already deleted");
         }
       }
 
-      // Create new sticky message
+      // Create embed data
+      const embedData = {
+        title: `${statusDetails.emoji} Order Status`,
+        description: `**Current Status:** ${statusDetails.title}\n\n**Details:** ${statusDetails.description}`,
+        color: statusDetails.color,
+        footer: `Last updated by ${interaction.user.tag}`,
+        timestamp: true,
+      };
+
+      // Create and send embed
+      const embed = createEmbedFromData(embedData);
       const newMessage = await channel.send({ embeds: [embed] });
 
       // Store the sticky data
-      orderStatusMessages.set(channel.id, {
+      stickyMessages.set(channel.id, {
         messageId: newMessage.id,
-        embed: embed,
-        lastMessageCount: 0,
+        embedData: embedData,
+        type: "status",
+        isUpdating: false,
       });
 
       await interaction.reply({
@@ -474,7 +524,114 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // Remove Status command
+  if (interaction.commandName === "stick-message") {
+    try {
+      const title = interaction.options.getString("title", true);
+      const description = interaction.options.getString("description", true);
+      const colorHex = interaction.options.getString("color") || "#5865F2"; // Discord blurple default
+      const channel = interaction.channel as TextChannel;
+
+      if (!channel) {
+        return await interaction.reply({
+          content: "❌ Could not access this channel.",
+          ephemeral: true,
+        });
+      }
+
+      // Check if there's already a sticky in this channel
+      const existingData = stickyMessages.get(channel.id);
+
+      if (existingData) {
+        return await interaction.reply({
+          content:
+            "❌ This channel already has a sticky message. Use `/remove-sticky` first.",
+          ephemeral: true,
+        });
+      }
+
+      // Parse color
+      const color = parseHexColor(colorHex);
+
+      // Create embed data (Discord will automatically render markdown formatters)
+      const embedData = {
+        title: title,
+        description: description,
+        color: color,
+      };
+
+      // Create and send embed
+      const embed = createEmbedFromData(embedData);
+      const newMessage = await channel.send({ embeds: [embed] });
+
+      // Store the sticky data
+      stickyMessages.set(channel.id, {
+        messageId: newMessage.id,
+        embedData: embedData,
+        type: "text",
+        isUpdating: false,
+      });
+
+      await interaction.reply({
+        content:
+          "✅ Message stickied! It will stay at the bottom. Use Discord markdown: **bold** *italic* __underline__ ~~strikethrough~~",
+        ephemeral: true,
+      });
+      console.log("📌 Sticky text message created");
+    } catch (error) {
+      console.error("Error:", error);
+      await interaction.reply({
+        content: "❌ Failed to stick message.",
+        ephemeral: true,
+      });
+    }
+  }
+
+  if (interaction.commandName === "remove-sticky") {
+    try {
+      const channel = interaction.channel as TextChannel;
+
+      if (!channel) {
+        return await interaction.reply({
+          content: "❌ Could not access this channel.",
+          ephemeral: true,
+        });
+      }
+
+      const stickyData = stickyMessages.get(channel.id);
+
+      if (!stickyData) {
+        return await interaction.reply({
+          content: "❌ No sticky message found in this channel.",
+          ephemeral: true,
+        });
+      }
+
+      try {
+        const message = await channel.messages.fetch(stickyData.messageId);
+        await message.delete();
+        stickyMessages.delete(channel.id);
+
+        await interaction.reply({
+          content: "✅ Sticky message removed!",
+          ephemeral: true,
+        });
+        console.log("✅ Sticky message removed");
+      } catch (error) {
+        stickyMessages.delete(channel.id);
+        await interaction.reply({
+          content: "✅ Sticky cleared (message was already deleted).",
+          ephemeral: true,
+        });
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      await interaction.reply({
+        content: "❌ Failed to remove sticky message.",
+        ephemeral: true,
+      });
+    }
+  }
+
   if (interaction.commandName === "remove-status") {
     try {
       const channel = interaction.channel as TextChannel;
@@ -486,11 +643,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      const stickyData = orderStatusMessages.get(channel.id);
+      const stickyData = stickyMessages.get(channel.id);
 
       if (!stickyData) {
         return await interaction.reply({
-          content: "❌ No order status message found in this channel.",
+          content: "❌ No order status found in this channel.",
+          ephemeral: true,
+        });
+      }
+
+      if (stickyData.type !== "status") {
+        return await interaction.reply({
+          content:
+            "❌ This channel has a text sticky, not an order status. Use `/remove-sticky` instead.",
           ephemeral: true,
         });
       }
@@ -498,15 +663,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       try {
         const message = await channel.messages.fetch(stickyData.messageId);
         await message.delete();
-        orderStatusMessages.delete(channel.id);
+        stickyMessages.delete(channel.id);
 
         await interaction.reply({
           content: "✅ Order status removed!",
           ephemeral: true,
         });
-        console.log("✅ Sticky order status removed");
+        console.log("✅ Order status removed");
       } catch (error) {
-        orderStatusMessages.delete(channel.id);
+        stickyMessages.delete(channel.id);
         await interaction.reply({
           content: "✅ Order status cleared (message was already deleted).",
           ephemeral: true,
